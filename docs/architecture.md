@@ -45,20 +45,34 @@ flowchart LR
 
 Registre seu plano aqui antes de editar o código.
 
-- Decisão da camada de apresentação:
-- Decisão da camada de lógica:
-- Decisão da camada de dados:
-- Abordagem para registro de atividades:
-- Abordagem para gerenciamento de equipes:
-- Abordagem para o placar:
-- Abordagem para sugestões de treino:
+- **Decisão da camada de apresentação:** os componentes de atividades, equipes, placar e treinos passam a consumir a API pelo cliente compartilhado em `octofit-tracker/frontend/src/api`, usando caminhos relativos `/api`. Cada tela trata carregamento, estado vazio e erro, com alerta acessível. A tela só é implementada depois que o contrato da API estiver verde.
+- **Decisão da camada de lógica:** as regras de negócio ficam em `octofit-tracker/backend/src/services/octofitService.ts`, e as rotas em `src/routes/api.ts` apenas recebem a requisição, delegam ao serviço e repassam erros ao middleware. Erros do cliente usam status 4xx com `status` explícito.
+- **Decisão da camada de dados:** os modelos Mongoose em `octofit-tracker/backend/src/models` declaram os campos obrigatórios com `required`. O seed em `src/scripts/seed.ts` usa esses modelos, sem scripts diretos do MongoDB, e é idempotente.
+- **Abordagem para registro de atividades:** `POST /api/activities` valida `userId` e `teamId` com `isValidObjectId`, confirma que a pessoa e a equipe existem e responde 4xx quando não existem. `points` e `occurredAt` são calculados pelo serviço, e não aceitos do cliente. `user`, `team`, `type` e `minutes` são gravados como enviados.
+- **Abordagem para gerenciamento de equipes:** `POST /api/teams` rejeita nome ausente com `400` e mantém `name` e `mascot` como enviados. `GET /api/teams` lista as equipes com seus integrantes.
+- **Abordagem para o placar:** `GET /api/leaderboard` agrega os pontos das atividades por equipe, ordena do maior para o menor total e devolve `teamName`, `totalPoints` e `rank` iniciando em 1. A agregação fica no banco, para não carregar todas as atividades na memória.
+- **Abordagem para sugestões de treino:** `GET /api/workouts/suggestions/:userEmail` busca a pessoa pelo e-mail, responde `404` quando não existe e monta `focus` a partir da meta ou da atividade recente. `reason` explica a escolha.
 
 ## Plano de testes
 
 Registre os comandos executados e o significado de cada falha.
+
+Comandos (executar a partir da raiz do repositório):
 
 - Testes da camada de dados: `npm run test:data --prefix octofit-tracker/backend`
 - Testes da API: `npm run test:api --prefix octofit-tracker/backend`
 - Testes do frontend: `npm test --prefix octofit-tracker/frontend`
 - Compilação do backend: `npm run build --prefix octofit-tracker/backend`
 - Compilação do frontend: `npm run build --prefix octofit-tracker/frontend`
+
+Ordem de execução: dados, depois API, depois frontend. Cada etapa só avança quando a anterior estiver verde.
+
+Estado inicial registrado (antes da implementação):
+
+| Suíte | Falhas | Significado |
+| --- | --- | --- |
+| Dados (`data.contract.test.ts`) | 4 | Os modelos não declaram `required`, então `validateSync()` não aponta campos ausentes. |
+| API (`api.contract.test.ts`) | 4 | `createActivity` e `createTeam` lançam `501`, o placar retorna `[]` e as sugestões ignoram o e-mail. |
+| Frontend (`app.contract.test.tsx`) | 15 | Os componentes são cartões estáticos: não consomem a API, não exibem dados, não anunciam carregamento, vazio ou erro. |
+
+Ao registrar uma nova execução, anote o comando, o número de falhas e a causa de cada uma.
